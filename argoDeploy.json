@@ -8,6 +8,6 @@
         "environmentId" : "dev",
         "environmentName" : "Development",
         "environmentType" : "development",
-        "environmentUrl" : "https://vendor-portal.dev.govirto.com/"
+        "environmentUrl" : "https://vcmarketplace-storefront.dev.govirto.com/"
     }
 }
