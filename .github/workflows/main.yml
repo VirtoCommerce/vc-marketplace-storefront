@@ -1,23 +1,25 @@
-# v1.0.0.vc-marketplace-storefront
+# v1.1.0.vc-marketplace-storefront
 name: Storefront CI
 on:
   workflow_dispatch:
   push:
+    branches: [ master, dev ]
     paths-ignore:
       - '.github/**'
       - 'docs/**'
       - 'build/**'
       - 'README.md'
       - 'LICENSE'
-    branches: [ master, dev ]
+      - '**/argoDeploy.json'
   pull_request:
+    branches: [ master, dev ]
     paths-ignore:
       - '.github/**'
       - 'docs/**'
       - 'build/**'
       - 'README.md'
       - 'LICENSE'
-    branches: [ master, dev ]
+      - '**/argoDeploy.json'
 
 jobs:
   ci:
@@ -29,9 +31,12 @@ jobs:
       NUGET_KEY: ${{ secrets.NUGET_KEY }}
       BLOB_SAS: ${{ secrets.BLOB_TOKEN }}
       IMAGE_NAME: 'marketplace-storefront'
+      PACKAGE_SERVER: 'ghcr.io'
       PUBLISH_TO_DOCKER: 'false'
       UPDATE_LATEST_TAG: 'true'
       VERSION_SUFFIX: ''
+    outputs:
+      artifactUrl:  ${{ steps.artifactUrl.outputs.DOCKER_URL }}
 
     steps:
 
@@ -80,6 +85,11 @@ jobs:
     - name: Packaging
       run: vc-build Compress -skip Clean+Restore+Compile+Test
 
+    - name: Set artifactUrl value
+      id: artifactUrl
+      run: |
+        echo ::set-output name=DOCKER_URL::${{ env.PACKAGE_SERVER }}/${{github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.taggedVersion }}
+
     - name: Build Docker Image
       if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master') }}
       id: dockerBuild
@@ -99,7 +109,7 @@ jobs:
       if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master') }}
       uses: azure/docker-login@v1
       with:
-        login-server: ghcr.io
+        login-server: ${{ env.PACKAGE_SERVER }}
         username: $GITHUB_ACTOR
         password: ${{ secrets.GITHUB_TOKEN }}
 
@@ -118,12 +128,19 @@ jobs:
       if: ${{ github.event_name == 'pull_request' }}
       uses: VirtoCommerce/vc-github-actions/publish-artifact-link@master
       with:
-        artifactUrl: 'ghcr.io/${{github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.taggedVersion }}'
+        artifactUrl:  ${{ steps.artifactUrl.outputs.DOCKER_URL }}
 
-    - name: Invoke VC image deployment workflow
-      if: ${{ github.ref == 'refs/heads/dev' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master')}}
-      uses: benc-uk/workflow-dispatch@v1
-      with:
-        workflow: VC deployment
-        token: ${{ secrets.REPO_TOKEN }}
-        inputs: '{ "artifactUrl": "ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ steps.image.outputs.taggedVersion }}" }'
+  dev_cd:
+    if: github.ref == 'refs/heads/dev' || (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/master')
+    needs: ci
+    runs-on: ubuntu-latest
+    env:
+      DEPLOYMENT_ENV: 'dev'
+      DEPLOY_CONFIG_PATH: '.deployment/vc-deploy-marketplace/argoDeploy.json'
+    steps:
+      - name: Invoke Module deployment workflow
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: VC deployment
+          token: ${{ secrets.REPO_TOKEN }}
+          inputs: '{ "artifactUrl": "${{ needs.ci.outputs.artifactUrl }}", "deployEnvironment": "${{ env.DEPLOYMENT_ENV }}", "deployConfigPath": "${{ DEPLOY_CONFIG_PATH }}" }'
