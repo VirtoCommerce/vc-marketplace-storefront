@@ -1,5 +1,5 @@
 {
-    "artifactKey": "docker.pkg.github.com/virtocommerce/vc-storefront/storefront",
+    "artifactKey": "ghcr.io/virtocommerce/marketplace-storefront",
     "deployRepo": "vc-deploy-marketplace",
     "cmPath": "marketplace-app/resources/kustomization.yaml",
     "dev": {
